@@ -11,17 +11,14 @@ import java.util.*
 fun main() {
     System.err.println("hello world")
     val logger = LoggerFactory.getLogger(Manipulation.javaClass)
-    runCatching outer@{
-        Manipulation.getFolder().walk().forEach inner@{
-            if (it.extension != FAST_RESUME_EXTENSION) return@inner
-            val map = bencode.decode(Files.readAllBytes(it.toPath()) , Type.DICTIONARY)
+    Manipulation.getFolder().walk().forEach outer@{
+        if (it.extension != FAST_RESUME_EXTENSION) return@outer
+        runCatching {
+            val map = bencode.decode(Files.readAllBytes(it.toPath()), Type.DICTIONARY)
             logger.info("map {}", map)
-            return@outer
         }
+            .onFailure { ex -> logger.error("Exception: ", ex) }
     }
-        .onFailure {
-            logger.error("Ex: ", it)
-        }
 }
 
 object Manipulation {
