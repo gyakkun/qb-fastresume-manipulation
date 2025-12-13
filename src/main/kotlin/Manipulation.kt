@@ -7,6 +7,7 @@ import com.google.common.base.Charsets.UTF_8
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -21,17 +22,24 @@ fun main() {
         if (it.extension != FAST_RESUME_EXTENSION) return@outer
         runCatching {
             val map = bencode.decode(Files.readAllBytes(it.toPath()), Type.DICTIONARY)
-            val byteBuffer = (map["info"]!! as Map<String, Object>)["name"] as ByteBuffer
-            val name = String(byteBuffer.array(), UTF_8)
-            if (name != "[BDMV][210929] ずっと真夜中でいいのに。 - 温れ落ち度") return@outer
-            logger.info("filename {}", it.name)
-            // logger.info("map {}", map)
-            logger.info("torrent name {}", name)
+            val trackers = map["trackers"] as ArrayList<ArrayList<ByteBuffer>>
+            val origSize = trackers.sumOf { it.size }
+            trackers.forEach { arr ->
+                val iter = arr.iterator()
+                while (iter.hasNext()) {
+                    val next = iter.next()
+                    val str = next.array().toString(StandardCharsets.UTF_8)
+                    if (str.startsWith("udp://")) iter.remove()
+                }
+            }
+            val newSize = trackers.sumOf { it.size }
+            if (origSize == newSize) return@outer
+            logger.info("Removed {} udp tracker for file {}", (origSize - newSize), it.toPath())
             val encodeByteArray = bencode.encode(map)
-            Files.write(getFolder().toPath().resolve("new/" + it.name), encodeByteArray)
+            it.writeBytes(encodeByteArray)
             return@outer
         }
-            .onFailure { ex -> logger.error("Exception: ", ex) }
+            .onFailure { ex -> logger.error("Exception: {}", it.toPath(), ex) }
     }
 }
 
